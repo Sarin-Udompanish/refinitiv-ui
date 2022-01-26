@@ -1,4 +1,10 @@
-import { fixture, expect, elementUpdated, aTimeout } from '@refinitiv-ui/test-helpers';
+import { 
+  fixture,
+  expect,
+  elementUpdated,
+  aTimeout,
+  keyboardEvent
+} from '@refinitiv-ui/test-helpers';
 
 import '@refinitiv-ui/elements/tab-bar';
 import '@refinitiv-ui/elemental-theme/light/ef-tab-bar';
@@ -10,6 +16,13 @@ const getElementStyle = (elem, prop) => {
 const scrollUpdated = async () => {
   await aTimeout(300);
 };
+
+const keyArrowUp = keyboardEvent('keydown', { key: 'Up' });
+const keyArrowDown = keyboardEvent('keydown', { key: 'Down' });
+const keyArrowLeft = keyboardEvent('keydown', { key: 'Left' });
+const keyArrowRight = keyboardEvent('keydown', { key: 'Right' });
+const keyHome = keyboardEvent('keydown', { key: 'Home' });
+const keyEnd = keyboardEvent('keydown', { key: 'End' });
 
 describe('tab-bar/TabBar', () => {
   it('DOM structure is correct', async () => {
@@ -172,6 +185,62 @@ describe('tab-bar/TabBar', () => {
 
       expect(getElementStyle(leftScrollBtn, 'display')).equal('none');
       expect(getElementStyle(rightScrollBtn, 'display')).equal('none');
+    });
+  });
+
+  describe('Accessibility', () => {
+    let el;
+    let tab1;
+    let tab2;
+    let tab3;
+
+    beforeEach(async () => {
+      el = await fixture(`
+        <ef-tab-bar level='2'>
+          <ef-tab id="tab-1">1</ef-tab>
+          <ef-tab id="tab-2">2</ef-tab>
+          <ef-tab id="tab-3">3</ef-tab>
+        </ef-tab-bar>
+      `);
+      tab1 = el.querySelector('#tab-1');
+      tab2 = el.querySelector('#tab-2');
+      tab3 = el.querySelector('#tab-3');
+    });
+    it('Should focus on next tab when press arrow right/down', async () => {
+      tab1.focus();
+      el.dispatchEvent(keyArrowRight);
+      setTimeout(() => el.dispatchEvent(keyArrowRight));
+      expect(document.activeElement).to.equal(tab2);
+      el.dispatchEvent(keyArrowDown);
+      setTimeout(() => el.dispatchEvent(keyArrowDown));
+      expect(document.activeElement).to.equal(tab3);
+    });
+    it('Should focus on previous tab when press arrow left/up', async () => {
+      tab3.focus();
+      el.dispatchEvent(keyArrowLeft);
+      setTimeout(() => el.dispatchEvent(keyArrowLeft));
+      expect(document.activeElement).to.equal(tab2);
+      el.dispatchEvent(keyArrowUp);
+      setTimeout(() => el.dispatchEvent(keyArrowUp));
+      expect(document.activeElement).to.equal(tab1);
+    });
+    it('Should focus on first tab when press arrow right on last tab', async () => {
+      tab3.focus();
+      el.dispatchEvent(keyArrowRight);
+      setTimeout(() => el.dispatchEvent(keyArrowRight));
+      expect(document.activeElement).to.equal(tab1);
+    });
+    it('Should focus on first tab when press home', async () => {
+      tab2.focus();
+      el.dispatchEvent(keyHome);
+      setTimeout(() => el.dispatchEvent(keyHome));
+      expect(document.activeElement).to.equal(tab1);
+    });
+    it('Should focus on last tab when press end', async () => {
+      tab1.focus();
+      el.dispatchEvent(keyEnd);
+      setTimeout(() => el.dispatchEvent(keyEnd));
+      expect(document.activeElement).to.equal(tab3);
     });
   });
 });

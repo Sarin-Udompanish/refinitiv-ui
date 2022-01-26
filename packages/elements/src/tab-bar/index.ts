@@ -11,7 +11,7 @@ import { customElement } from '@refinitiv-ui/core/lib/decorators/custom-element.
 import { property } from '@refinitiv-ui/core/lib/decorators/property.js';
 import { query } from '@refinitiv-ui/core/lib/decorators/query.js';
 import { VERSION } from '../version.js';
-import type { Tab } from '../tab';
+import { Tab } from '../tab';
 import { tweenAnimate } from './helpers/animate.js';
 import type { Button } from '../button';
 import '../button/index.js';
@@ -33,6 +33,8 @@ export class TabBar extends ResponsiveElement {
   static get version (): string {
     return VERSION;
   }
+
+  protected readonly defaultRole = 'tablist';
 
   /**
    * A `CSSResultGroup` that will be used
@@ -67,10 +69,31 @@ export class TabBar extends ResponsiveElement {
   public level: '1' | '2' | '3' = '1';
 
   /**
+   * Aria indicating current orientation
+   * @ignore
+   */
+  @property({ type: String, reflect: true, attribute: 'aria-orientation' })
+  public ariaOrientation = this.vertical && 'vertical' || 'horizontal';
+
+  private _vertical = false;
+
+  /**
    * Use to switch from horizontal to vertical layout.
+   * @param value is vertical
+   * @default false
    */
   @property({ type: Boolean, reflect: true })
-  public vertical = false;
+  public set vertical (value: boolean) {
+    const oldValue = this._vertical;
+    if (oldValue !== value) {
+      this._vertical = value;
+      this.ariaOrientation = value ? 'vertical' : 'horizontal';
+      void this.requestUpdate('vertical', oldValue);
+    }
+  }
+  public get vertical (): boolean {
+    return this._vertical;
+  }
 
   @query('[part="content"')
   private content!: HTMLElement;
@@ -99,6 +122,7 @@ export class TabBar extends ResponsiveElement {
         this.toggleScrollButton(this.content.clientWidth);
       }, 66); // equal 15 fps for compatibility
     });
+    this.addEventListener('keydown', this.onKeyDown);
   }
 
   /**
@@ -225,6 +249,95 @@ export class TabBar extends ResponsiveElement {
     tweenAnimate({ target: this.content, startPosition: scrollLeft, endPosition });
   }
 
+  private focusAndScrollTo (element: HTMLElement) {
+    element.focus();
+    element.scrollIntoView({ block: 'nearest' });
+  }
+
+  /**
+   * Get all focusable tab element
+   * @return Array of tab elements
+   */
+  private get focusableTabs () {
+    return this.tabbableElements.filter(element => element instanceof Tab);
+  }
+
+  /**
+   * Navigate to first focusable tab of the tab bar
+   * @returns {void}
+   */
+  private first (): void {
+    if(this.focusableTabs.length <= 0) {
+      return;
+    }
+    this.focusAndScrollTo(this.focusableTabs[0]);
+  }
+
+  /**
+   * Navigate to last focusable tab of the tab bar
+   * @returns {void}
+   */
+  private last (): void {
+    if(this.focusableTabs.length <= 0) {
+      return;
+    }
+    this.focusAndScrollTo(this.focusableTabs[this.focusableTabs.length - 1]);
+  }
+
+  /**
+   * Navigate to next or previous focusable tab
+   * @param direction up/next; down/previous
+   * @returns {void}
+   */
+  private navigateToSibling (direction: 'next' | 'previous'): void {
+    if(this.focusableTabs.length <= 0) {
+      return;
+    }
+
+    const focusedTabIndex = this.focusableTabs.findIndex(tab => tab === document.activeElement);
+    const nextTab = direction === 'next'
+      ? this.focusableTabs[focusedTabIndex + 1] || this.focusableTabs[0]
+      : this.focusableTabs[focusedTabIndex - 1] || this.focusableTabs[this.focusableTabs.length - 1];
+
+    this.focusAndScrollTo(nextTab);
+  }
+
+  /**
+   * Handles key down event
+   * @param event Key down event object
+   * @returns {void}
+   */
+  private onKeyDown (event: KeyboardEvent): void {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    switch (event.key) {
+      case 'Right':
+      case 'Down':
+      case 'ArrowRight':
+      case 'ArrowDown':
+        this.navigateToSibling('next');
+        break;
+      case 'Left':
+      case 'Up':
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        this.navigateToSibling('previous');
+        break;
+      case 'Home':
+        this.first();
+        break;
+      case 'End':
+        this.last();
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+  }
+
   /**
    * A `TemplateResult` that will be used
    * to render the updated internal template.
@@ -232,11 +345,11 @@ export class TabBar extends ResponsiveElement {
    */
   protected render (): TemplateResult {
     return html`
-    <ef-button icon="left" part="left-btn" @tap=${this.handleScrollLeft}></ef-button>
+    <ef-button tabIndex="-1" icon="left" part="left-btn" @tap=${this.handleScrollLeft}></ef-button>
       <div part="content">
         <slot @slotchange=${this.onSlotChange}></slot>
       </div>
-    <ef-button icon="right" part="right-btn" @tap=${this.handleScrollRight}></ef-button>
+    <ef-button tabIndex="-1" icon="right" part="right-btn" @tap=${this.handleScrollRight}></ef-button>
     `;
   }
 }

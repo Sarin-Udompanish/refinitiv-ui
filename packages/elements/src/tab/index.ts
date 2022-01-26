@@ -3,7 +3,8 @@ import {
   css,
   TemplateResult,
   CSSResultGroup,
-  ControlElement
+  ControlElement,
+  PropertyValues
 } from '@refinitiv-ui/core';
 import { customElement } from '@refinitiv-ui/core/lib/decorators/custom-element.js';
 import { property } from '@refinitiv-ui/core/lib/decorators/property.js';
@@ -11,10 +12,6 @@ import { VERSION } from '../version.js';
 
 import '../icon/index.js';
 import '../label/index.js';
-
-const isAllWhitespaceTextNode = (node: Node): boolean =>
-  node.nodeType === document.TEXT_NODE
-  && !node.textContent?.trim();
 
 /**
  * A building block for individual tab
@@ -36,6 +33,34 @@ export class Tab extends ControlElement {
     return VERSION;
   }
 
+  protected readonly defaultRole = 'tab';
+
+  /**
+   * A `CSSResultGroup` that will be used
+   * to style the host, slotted children
+   * and the internal template of the element.
+   * @returns CSS template
+   */
+  static get styles (): CSSResultGroup {
+    return css`
+      :host {
+        display: inline-flex;
+        flex-shrink: 0;
+      }
+      :host(:not(:empty)) [part=label],
+      :host(:not(:empty)) [part=sub-label] {
+        display: none;
+      }
+    `;
+  }
+
+  /**
+   * Aria indicating current select state
+   * @ignore
+   */
+  @property({ type: String, reflect: true, attribute: 'aria-selected' })
+  public ariaSelected = 'false';
+
   /**
    * Specify icon name to display in tab
    */
@@ -54,11 +79,25 @@ export class Tab extends ControlElement {
   @property({ type: String, attribute: 'sub-label' })
   public subLabel = '';
 
+  private _active = false;
+
   /**
    * Specify tab's active status
+   * @param value active value
+   * @default false
    */
   @property({ type: Boolean, reflect: true })
-  public active = false;
+  public set active (value: boolean) {
+    const oldValue = this._active;
+    if (oldValue !== value) {
+      this._active = value;
+      this.ariaSelected = String(value);
+      void this.requestUpdate('active', oldValue);
+    }
+  }
+  public get active (): boolean {
+    return this._active;
+  }
 
   /**
    * Set tab to clearable
@@ -86,29 +125,15 @@ export class Tab extends ControlElement {
   public level: '1' | '2' | '3' = '1';
 
   /**
-   * True, if there is slotted content
-   */
-  private isSlotHasChildren = true;
-
-  /**
-   * @param node that should be checked
-   * @returns whether node can be ignored.
-   */
-  private isIgnorable (node: Node): boolean {
-    return node.nodeType === document.COMMENT_NODE
-      || isAllWhitespaceTextNode(node);
-  }
-
-  /**
-   * Checks slotted children nodes and updates component to refresh label and sub-label templates.
-   * @param event slotchange
+   * Called after the element’s DOM has been updated the first time.
+   * register scroll event on content element to toggle scroll button
+   * @param changedProperties Properties that has changed
    * @returns {void}
    */
-  private checkSlotChildren = (event: Event): void => {
-    const slot = event.target as HTMLSlotElement;
-    this.isSlotHasChildren = !slot.assignedNodes().filter(node => !this.isIgnorable(node)).length;
-    this.requestUpdate();
-  };
+  protected firstUpdated (changedProperties: PropertyValues): void {
+    super.firstUpdated(changedProperties);
+    this.addEventListener('keydown', this.onKeyDown);
+  }
 
   /**
    * Omitted lineClamp if subLabel is provided
@@ -131,18 +156,17 @@ export class Tab extends ControlElement {
   }
 
   /**
-   * A `CSSResultGroup` that will be used
-   * to style the host, slotted children
-   * and the internal template of the element.
-   * @returns CSS template
+   * Handles key down event
+   * @param event Key down event object
+   * @returns {void}
    */
-  static get styles (): CSSResultGroup {
-    return css`
-      :host {
-        display: inline-flex;
-        flex-shrink: 0;
-      }
-    `;
+  private onKeyDown (event: KeyboardEvent): void {
+    if (event.defaultPrevented) {
+      return;
+    }
+    if(event.key === 'Delete' && (this.clears || this.clearsOnHover)) {
+      this.dispatchEvent(new CustomEvent('clear'));
+    }
   }
 
   /**
@@ -158,11 +182,11 @@ export class Tab extends ControlElement {
   }
 
   /**
-   * Create ef-label template when label is true
+   * Create ef-label template if label is provided
    * @returns Label template
    */
   private get LabelTemplate (): TemplateResult | null {
-    if(!this.label || !this.isSlotHasChildren) {
+    if(!this.label) {
       return null;
     }
     return html`
@@ -175,17 +199,18 @@ export class Tab extends ControlElement {
   }
 
   /**
-   * Create ef-label template when subLabel is true
+   * Create ef-label template if subLabel is provided
    * @returns SubLabel template
    */
   private get SubLabelTemplate (): TemplateResult | null {
-    if(!this.subLabel || !this.isSlotHasChildren) {
+    if(!this.subLabel) {
       return null;
     }
     return html`
       <ef-label
-      part="sub-label"
-      .lineClamp=${this.getLineClamp()}>
+        part="sub-label"
+        .lineClamp=${this.getLineClamp()}
+      >
         ${this.subLabel}
       </ef-label>
     `;
@@ -202,8 +227,7 @@ export class Tab extends ControlElement {
         <div part="label-container">
           ${this.LabelTemplate}
           ${this.SubLabelTemplate}
-          <slot @slotchange="${this.checkSlotChildren}">
-          </slot>
+          <slot></slot>
         </div>
       ${this.CloseTemplate}
     `;

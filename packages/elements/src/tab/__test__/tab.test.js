@@ -1,7 +1,15 @@
-import { fixture, expect, elementUpdated, oneEvent } from '@refinitiv-ui/test-helpers';
+import {
+  fixture,
+  expect,
+  elementUpdated,
+  oneEvent,
+  keyboardEvent
+} from '@refinitiv-ui/test-helpers';
 
 import '@refinitiv-ui/elements/tab';
 import '@refinitiv-ui/elemental-theme/light/ef-tab';
+
+const keyDelete = keyboardEvent('keydown', { key: 'Delete' });
 
 describe('tab/Tab', () => {
   describe('DOM Structure', () => {
@@ -149,8 +157,23 @@ describe('tab/Tab', () => {
       label = el.shadowRoot.querySelector('[part=label]');
       subLabel = el.shadowRoot.querySelector('[part=sub-label]');
       expect(el.textContent.trim()).to.equal(slottedContent);
-      expect(label).to.equal(null);
-      expect(subLabel).to.equal(null);
+      expect(getComputedStyle(label).display).to.equal('none');
+      expect(getComputedStyle(subLabel).display).to.equal('none');
     });
   });
+  describe('Accessibility', () => {
+    it('Should apply aria-selected to active tab', async () => {
+      const el = await fixture('<ef-tab label="Home"></ef-tab>');
+      expect(el.ariaSelected).to.equal('false');
+      el.active = true;
+      await elementUpdated();
+      expect(el.ariaSelected).to.equal('true');
+    });
+    it('Should fired clear event when press delete', async () => {
+      const el = await fixture('<ef-tab label="Home" clears></ef-tab>');
+      setTimeout(() => el.dispatchEvent(keyDelete));
+      const ev = await oneEvent(el, 'clear');
+      expect(ev.type).to.equal('clear');
+    });
+  })
 });
